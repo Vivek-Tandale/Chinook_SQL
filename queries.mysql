@@ -1,0 +1,434 @@
+-- Segment 1:  Database - Tables, Columns, Relationships
+--	Identify the tables in the database and their respective columns.
+    show tables;
+
+    describe album;
+    describe artist;
+    describe customer;
+    describe employee;
+    describe genre;
+    describe invoice;
+    describe invoice_line;
+    describe media_type;
+    describe playlist;
+    describe playlist_track;
+    describe track;
+
+--	Determine the number of records in each table within the schema.
+    select count(*) from album;
+    select count(*) from artist;
+    select count(*) from customer;
+    select count(*) from employee;
+    select count(*) from genre;
+    select count(*) from invoice;
+    select count(*) from invoice_line;
+    select count(*) from media_type;
+    select count(*) from playlist;
+    select count(*) from playlist_track;
+    select count(*) from track;
+ 
+--	Analyse the data types of the columns in each table to ensure they are appropriate for the stored data.
+    describe album;
+    describe artist;
+    describe customer;
+    describe employee;
+    describe genre;
+    describe invoice;
+    describe invoice_line;
+    describe media_type;
+    describe playlist;
+    describe playlist_track;
+    describe track;
+
+--	Identify any duplicate records within the tables and develop a strategy for handling them.
+    select * from album a inner join album b
+    on a.albumid = b.albumid
+    where a.title <> b.title;
+
+    select * from artist a inner join artist b
+    on a.artistid = b.artistid
+    where a.Name <> b.Name;
+
+-- Segment 2: Track/Album Analysis
+--	How many tracks does Chinook store have in total?
+    select count(*) from track;
+
+--	Which tracks are the most popular among customers?
+    select track.trackid, track.name, sum(invoice.total) as revenue
+    from track
+        left join invoice_line
+        on track.trackid = invoice_line.trackid
+
+        left join invoice
+        on invoice.invoiceid = invoice_line.invoiceid
+    group by track.trackid, track.name
+    order by revenue desc;
+
+--	What are the top-selling albums in the Chinook store?
+    select album.AlbumId, album.Title, sum(invoice.total) as revenue
+    from album
+        inner join track
+        on album.albumid = track.albumid
+
+        inner join invoice_line
+        on track.trackid = invoice_line.trackid
+
+        inner join invoice
+        on invoice.invoiceid = invoice_line.invoiceid
+    group by album.albumid, album.title
+    order by revenue DESC;
+
+--	Which artist or album has the highest number of tracks in the store?
+    select artist.ArtistId, artist.Name, count(track.trackid) as track_count
+    from artist
+        inner join album
+        on artist.artistid = album.artistid
+
+        inner join track
+        on album.albumid = track.albumid
+    group by artist.artistid, artist.name
+    order by track_count DESC
+    limit 1;
+
+    select album.albumid, album.title, count(track.trackid) as track_count
+    from album
+        inner join track
+        on album.albumid = track.albumid
+    group by album.albumid, album.title
+    order by track_count DESC
+    limit 1;
+
+--	Determine the number of tracks for each album and calculate the total duration of each album. Identify the albums that have the highest average track duration.
+    -- Number of tracks for each album
+    select album.albumid, album.title, count(track.trackid) as track_count
+    from album
+        inner join track
+        on album.albumid = track.albumid
+    group by album.albumid, album.title
+    order by track_count DESC;
+
+    -- Total duration of album
+    select album.albumid, album.title, sum(track.milliseconds) as total_duration
+    from album
+        inner join track
+        on album.albumid = track.albumid
+    group by album.albumid, album.title
+    order by total_duration DESC;
+
+    -- Highest Average Duration
+    select album.albumid, album.title, avg(track.milliseconds) as avg_duration
+    from album
+        inner join track
+        on album.albumid = track.albumid
+    group by album.albumid, album.title
+    order by avg_duration DESC;
+
+--	How does the genre distribution vary among albums?
+    select genre.genreid, genre.Name, count(track.albumid) album_count
+    from genre
+        inner join track
+        on genre.genreid = track.albumid
+    group by genre.genreid, genre.name;
+
+-- Segment 3: Customer Analysis
+--	Analyse customer demographics, purchase history, and preferences.
+    -- customer demographic (country)
+    select country, count(*) as count
+    from customer
+    group by country
+    order by count DESC;
+
+    -- Purchase history
+    select 
+        c.CustomerId, 
+        c.FirstName, 
+        c.LastName,
+        year(STR_TO_DATE(i.invoicedate, '%d-%m-%Y')) as year,
+        count(i.invoiceid) as no_of_purchases
+    from customer c
+        inner join invoice i
+        on c.customerid = i.customerid
+    group by c.customerid, c.firstname, c.lastname, year
+    order by c.customerid;
+
+    -- Prefernces
+    select 
+        c.customerid as customerid, 
+        year(str_to_date(i.invoicedate, '%d-%m-%Y')) as year,
+        g.name as genre
+    from customer c
+        inner join invoice i
+        on i.customerid = c.customerid
+
+        inner join invoice_line il
+        on i.invoiceid = il.invoiceid
+
+        inner join track t
+        on t.trackid = il.trackid
+
+        inner join genre g
+        on g.genreid = t.genreid
+        
+    group by customerid, year, genre
+    order by customerid, year, genre;
+
+--	How many unique customers are there in the Chinook store?
+    select count(*) from customer;
+
+--	What is the distribution of customers across different countries?
+    select country, count(*) as count
+    from customer
+    group by country
+    order by count DESC;
+
+--	Identify the average number of tracks purchased per customer for each genre.
+    with temp1 as (
+        select c.customerid as customerid, g.name as genre, count(t.trackid) as no_of_tracks
+        from customer c
+            inner join invoice i
+            on c.customerid = i.customerid
+
+            inner join invoice_line il
+            on i.invoiceid = il.invoiceid
+
+            inner join track t
+            on t.trackid = il.trackid
+
+            inner join genre g
+            on t.genreid = g.genreid
+        group by customerid, genre
+        order by customerid
+    )
+    select genre, sum(no_of_tracks)/ count(customerid) as average_no_of_tracks
+    from temp1
+    group by genre;
+
+--	What is the average purchase value per customer?
+    select c.customerid, sum(i.total)/count(i.invoiceid) as average_purchase_value
+    from customer c
+        inner join invoice i
+        on c.customerid = i.customerid
+    group by c.customerid
+    order by c.customerid;
+
+--	Which customers have made the highest number of purchases?
+    select c.customerid, count(il.invoicelineid) as no_of_purchases
+    from customer c
+        inner join invoice i
+        on c.customerid = i.customerid
+
+        inner join invoice_line il
+        on i.invoiceid = il.invoiceid
+    group by c.customerid
+    order by c.customerid;    
+
+-- Segment 4: Support analysis
+--	What is the total sales revenue generated by each sales support agent?
+    select c.supportrepid as support_rep_id, e.FirstName as firstname, e.LastName as lastname, sum(i.total) as sales_revenue
+    from customer c
+        inner join invoice i
+        on c.customerid = i.customerid
+
+        LEFT join employee e
+        on e.employeeid = c.supportrepid
+    group by support_rep_id, firstname, lastname
+    order by support_rep_id;
+
+--	What is the average order value for each sales support agent?
+    select c.supportrepid as support_rep_id, e.FirstName as firstname, e.LastName as lastname, AVG(i.total) as avg_order_value
+    from customer c
+        inner join invoice i
+        on c.customerid = i.customerid
+
+        LEFT join employee e
+        on e.employeeid = c.supportrepid
+    group by support_rep_id, firstname, lastname
+    order by support_rep_id;
+
+--	How does the hiring date of sales support agents impact their sales performance?
+    select c.supportrepid as support_rep_id, e.Hiredate as hire_date, sum(i.total) as total_sales, AVG(i.total) as avg_order_value
+    from customer c
+        inner join invoice i
+        on c.customerid = i.customerid
+
+        LEFT join employee e
+        on e.employeeid = c.supportrepid
+    group by support_rep_id, hiredate
+    order by support_rep_id;
+
+-- Segment 5: Sales Analysis
+--	What is the total revenue generated by the Chinook store?
+    select sum(total) from invoice;
+
+--	How does the revenue vary across different countries?
+    select country, sum(i.total) as revenue
+    from customer c
+        left join invoice i
+        on c.customerid = i.customerid
+    group by country
+    order by revenue desc;
+
+--	Calculate the percentage of total sales contributed by each genre in the USA and identify the best-selling genres and artists.
+    -- best selling genre
+    select c.country, g.name, sum(il.unitprice)/sum(i.total)*100 as percentage_total_sales
+    from customer c
+        left join invoice i
+        on c.customerid = i.customerid
+
+        left join invoice_line il
+        on i.invoiceid = il.invoiceid
+
+        left join track t
+        on il.trackid = t.trackid
+
+        left join genre g
+        on g.genreid = t.genreid
+    where c.country = 'USA'
+    group by c.country, g.name
+    order by percentage_total_sales desc;
+
+    -- best selling artist
+    select c.country, ar.name, sum(il.unitprice) as most_selling_artist
+    from customer c
+        left join invoice i
+        on c.customerid = i.customerid
+
+        left join invoice_line il
+        on i.invoiceid = il.invoiceid
+
+        left join track t
+        on il.trackid = t.trackid
+
+        left join album a
+        on a.albumid = t.albumid
+
+        left join artist ar
+        on a.artistid = ar.artistid
+    where c.country = 'USA'
+    group by c.country, ar.name
+    order by most_selling_artist desc;
+
+--	Evaluate sales performance over time to identify seasonal trends and peak periods.
+    select 
+        YEAR(STR_TO_DATE(invoicedate, '%d-%m-%Y')) as year, 
+        MONTH(STR_TO_DATE(invoicedate, '%d-%m-%Y')) as month,
+        sum(total)
+    from invoice
+    group by year, month;
+
+-- Segment 6: SQL Concepts
+--	Use subqueries to find the top-selling tracks in the USA and identify their associated genres.
+    with temp1 as (
+        select il.UnitPrice, il.trackid
+        from customer c
+            left join invoice i
+            on c.customerid = i.customerid
+
+            left join invoice_line il
+            on il.invoiceid = i.invoiceid
+        where c.country = 'USA'
+    ), temp2 as(
+    select trackid, sum(unitprice) as revenue
+    from temp1
+    group by trackid
+    order by revenue DESC
+    )
+    select temp2.trackid, temp2.revenue, genre.name as genre
+    from temp2 
+        left join track
+        on temp2.trackid = track.trackid
+
+        left join genre
+        on track.genreid = genre.genreid;
+
+--	Implement joins to retrieve customer information along with their preferred genres and country of origin.
+    /*
+    select c.customerid, c.FirstName, c.LastName, g.name as genre, count(t.trackid) as track_count
+    from customer c
+        left join invoice i
+        on c.customerid = i.customerid
+
+        left join invoice_line il
+        on i.invoiceid = il.invoiceid
+
+        left join track t
+        on il.trackid = t.trackid
+
+        left join genre g
+        on t.genreid = g.genreid
+    group by c.customerid, c.firstname, c.lastname, g.name
+    order by c.customerid, track_count DESC;
+    */
+
+--	Apply window functions to rank genres based on their sales performance in the USA.
+    with temp1 as(
+        select g.name as genre, sum(il.unitprice) as revenue
+        from customer c
+            left join invoice i
+            on c.customerid = i.customerid
+
+            left join invoice_line il
+            on i.invoiceid = il.invoiceid
+
+            left join track t
+            on t.trackid = il.trackid
+
+            left join genre g
+            on g.genreid = t.genreid
+        group by genre
+        )
+    SELECT 
+        rank() over(order by revenue desc) as ranks,
+        genre, revenue
+        from temp1;
+
+--	Create stored procedures to calculate the average revenue per sale for each genre in the USA.
+    delimiter //
+    drop procedure if exists avg_rev_per_sale//
+    create procedure avg_rev_per_sale(in year INT)
+    BEGIN
+        select 
+            year(str_to_date(invoicedate, '%d-%m-%Y')) as search_year,
+            sum(total)/count(invoiceid) as avg_rev_per_sale
+        from invoice
+        group by search_year
+        having search_year = year;
+    end //
+    delimiter ;
+
+    -- calling the procedure
+    call avg_rev_per_sale(2009);
+
+-- Segment 7: Market Expansion and Advertising Strategy
+--	Recommend the three albums from the new record label that should be prioritised for advertising and promotion in the USA based on genre sales analysis.
+
+
+--	Identify high-value customers and develop personalised marketing strategies to nurture customer loyalty.
+    select c.customerid, sum(i.total) customer_spends
+    from customer c
+        left join invoice i
+        on c.customerid = i.customerid
+    group by c.customerid
+    order by customer_spends DESC;
+
+--	Analyse the potential for expanding sales of different genres in other countries based on their sales performance in the USA.
+
+
+--	Determine the top-selling genres in countries other than the USA and identify any commonalities or differences.
+    select g.name as genre, sum(il.unitprice) as revenue
+    from customer c
+        left join invoice i
+        on c.customerid = i.customerid
+
+        left join invoice_line il
+        on i.invoiceid = il.invoiceid
+
+        left join track t
+        on il.trackid = t.trackid
+
+        left join genre g
+        on t.genreid = g.genreid
+
+        where c.country not like 'USA'
+    group by genre
+    order by revenue DESC;
