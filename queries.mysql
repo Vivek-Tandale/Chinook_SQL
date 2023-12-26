@@ -1,5 +1,6 @@
 -- Segment 1:  Database - Tables, Columns, Relationships
---	Identify the tables in the database and their respective columns.
+--  Identify the tables in the database and their respective columns.
+    use chinook;
     show tables;
 
     describe album;
@@ -401,7 +402,7 @@
 
 -- Segment 7: Market Expansion and Advertising Strategy
 --	Recommend the three albums from the new record label that should be prioritised for advertising and promotion in the USA based on genre sales analysis.
-
+    
 
 --	Identify high-value customers and develop personalised marketing strategies to nurture customer loyalty.
     select c.customerid, sum(i.total) customer_spends
