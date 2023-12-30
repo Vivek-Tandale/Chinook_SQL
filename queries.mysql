@@ -343,8 +343,9 @@
         on track.genreid = genre.genreid;
 
 --	Implement joins to retrieve customer information along with their preferred genres and country of origin.
-    /*
-    select c.customerid, c.FirstName, c.LastName, g.name as genre, count(t.trackid) as track_count
+    -- To understand the prefered genre of each customer we create a new view
+    create VIEW genre_count AS
+    select c.customerid as customerid, g.Name as genre, count(g.name) as count
     from customer c
         left join invoice i
         on c.customerid = i.customerid
@@ -357,9 +358,31 @@
 
         left join genre g
         on t.genreid = g.genreid
-    group by c.customerid, c.firstname, c.lastname, g.name
-    order by c.customerid, track_count DESC;
-    */
+    group by customerid, genre
+    order by customerid, COUNT DESC;
+
+    -- Now select the most prefered genre from this view
+    create view prefered_genre as
+    select a.customerid, a.genre, a.COUNT
+    from genre_count a
+        inner join (
+            select customerid, max(count) as max_count
+            from genre_count
+            group by customerid
+        ) b
+        on a.customerid = b.customerid and a.count = b.max_count;
+
+    -- Now we can use joins to get the Customer Info with the prefered genre
+    select 
+        customer.customerid, 
+        customer.firstname, 
+        customer.lastname, 
+        customer.country, 
+        prefered_genre.genre as genre
+    from prefered_genre
+        left join customer
+        on prefered_genre.customerid = customer.customerid;
+
 
 --	Apply window functions to rank genres based on their sales performance in the USA.
     with temp1 as(
@@ -402,7 +425,27 @@
 
 -- Segment 7: Market Expansion and Advertising Strategy
 --	Recommend the three albums from the new record label that should be prioritised for advertising and promotion in the USA based on genre sales analysis.
-    
+    select a.title as album_name, g.name as genre, sum(il.unitprice) as sales
+    from customer c
+        left join invoice i
+        on c.customerid = i.customerid
+
+        left join invoice_line il
+        on i.invoiceid = il.invoiceid
+
+        left join track t
+        on il.trackid = t.trackid
+
+        left join album a
+        on t.albumid = a.albumid
+
+        left join genre g
+        on g.genreid = t.genreid
+    where g.name = 'Rock' and c.country = 'USA'
+    group by album_name, genre
+    order by sales DESC
+    limit 3
+    ;
 
 --	Identify high-value customers and develop personalised marketing strategies to nurture customer loyalty.
     select c.customerid, sum(i.total) customer_spends
@@ -413,7 +456,49 @@
     order by customer_spends DESC;
 
 --	Analyse the potential for expanding sales of different genres in other countries based on their sales performance in the USA.
+    with temp1 as(
+        select g.name as genre, sum(il.unitprice) as sales
+        from customer c
+            left join invoice i
+            on c.customerid = i.customerid
 
+            left join invoice_line il
+            on i.invoiceid = il.invoiceid
+
+            left join track t
+            on il.trackid = t.trackid
+
+            left join genre g
+            on g.genreid = t.genreid
+        where c.country = 'USA'
+        group by genre
+        order by sales DESC
+    ), 
+    temp2 as (
+        select 
+            g.name as genre, 
+            sum(il.unitprice) as sales
+        from customer c
+            left join invoice i
+            on c.customerid = i.customerid
+
+            left join invoice_line il
+            on i.invoiceid = il.invoiceid
+
+            left join track t
+            on il.trackid = t.trackid
+
+            left join genre g
+            on g.genreid = t.genreid
+
+            where c.country not like 'USA'
+        group by genre
+        order by sales DESC
+    )
+    select a.genre, a.sales as america_sales, b.sales as non_america_sales
+    from temp1 a
+        LEFT join temp2 b
+        on a.genre = b.genre;
 
 --	Determine the top-selling genres in countries other than the USA and identify any commonalities or differences.
     select g.name as genre, sum(il.unitprice) as revenue
